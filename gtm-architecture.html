@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<title>Round Treasury — GTM Operations Architecture</title>
+<style>
+:root{
+  --teal:#0d9488;--teal-50:#f0fdfa;--teal-100:#ccfbf1;--teal-900:#134e4a;
+  --coral:#ea580c;--coral-50:#fff7ed;--coral-700:#c2410c;
+  --amber:#f59e0b;--amber-50:#fffbeb;--amber-800:#92400e;
+  --green:#16a34a;--green-50:#f0fdf4;--green-800:#166534;
+  --ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#fafafa;--card:#ffffff;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  background:var(--bg);color:var(--ink);font-size:13px;line-height:1.4;min-width:1280px;
+}
+body{padding:12px 26px 16px}
+
+.page-header{
+  display:flex;justify-content:space-between;align-items:flex-end;
+  border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:10px;gap:24px;
+}
+.page-header h1{font-size:20px;font-weight:700;letter-spacing:-0.01em}
+.page-header .sub{font-size:12px;color:var(--muted);margin-top:2px}
+
+.legend{display:flex;gap:12px;font-size:10.5px;color:var(--muted);align-items:center;flex-wrap:wrap;justify-content:flex-end;max-width:640px}
+.lg{display:flex;gap:5px;align-items:center}
+.lg-swatch{width:14px;height:10px;border-radius:2px;border:2px solid}
+.lg-swatch.ai{border-color:var(--teal);background:var(--teal-50)}
+.lg-swatch.human{border-color:var(--coral);border-style:dotted;background:var(--coral-50)}
+.lg-line{width:22px;height:0;border-top:2px solid var(--ink)}
+.lg-line.dashed{border-top-style:dashed;border-top-color:var(--teal)}
+.lg-line.solid{border-top-color:var(--ink)}
+
+.architecture{position:relative}
+.tier-label{
+  display:flex;align-items:center;gap:10px;font-size:10px;text-transform:uppercase;
+  letter-spacing:0.1em;color:var(--muted);font-weight:700;margin-bottom:5px;
+}
+.tier-label::after{content:"";flex:1;height:1px;background:var(--line)}
+.tier-label .num{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:18px;height:18px;border-radius:50%;background:var(--ink);color:#fff;
+  font-size:10px;font-weight:700;letter-spacing:0;
+}
+
+/* MASTER ROW: hero card centred at top */
+.master-row{display:flex;justify-content:center;position:relative}
+.master-card{
+  width:58%;min-width:680px;max-width:840px;
+  border-width:2.5px;
+  padding:11px 18px;
+  position:relative;
+}
+.master-card .card-name{font-size:16px;letter-spacing:-0.005em}
+.master-card .card-role{font-size:12.5px;color:var(--ink);font-weight:500}
+.master-card::before{
+  content:"Master node";
+  position:absolute;top:-9px;left:18px;
+  font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;
+  color:var(--teal);background:var(--bg);padding:0 6px;
+}
+
+/* TIER ROWS: 3-col default, 4-col variant with Reporting sidecar */
+.tier-row{display:grid;gap:30px;position:relative;align-items:start;grid-template-columns:repeat(3,1fr)}
+.tier-row.cols-4{grid-template-columns:1fr 1fr 1fr 0.78fr}
+
+.card{
+  background:var(--card);border:2px solid var(--teal);border-radius:8px;
+  padding:10px 12px;position:relative;cursor:pointer;min-height:62px;
+  transition:transform 0.12s ease;
+}
+.card.human{border-style:dotted;border-color:var(--coral)}
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:3px}
+.card-name{font-weight:700;font-size:13.5px;color:var(--teal-900);letter-spacing:-0.005em}
+.card.human .card-name{color:var(--coral-700)}
+.card-role{font-size:11.5px;color:var(--muted);line-height:1.35}
+.badges{display:flex;gap:4px;flex-shrink:0}
+.badge{
+  font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;
+  text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;border:1px solid;
+}
+.badge.gap{background:var(--amber-50);color:var(--amber-800);border-color:var(--amber)}
+.badge.built{background:var(--green-50);color:var(--green-800);border-color:var(--green)}
+.badge.human-tag{background:var(--coral-50);color:var(--coral-700);border-color:var(--coral)}
+
+/* Reporting sidecar styling: smaller, downstream consumer */
+.reporting-card{
+  background:var(--teal-50);
+  border-width:1.5px;
+  padding:9px 11px;
+  margin-top:11px;
+  position:relative;
+}
+.reporting-card::before{
+  content:"Downstream output";
+  position:absolute;top:-10px;left:10px;
+  font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;
+  color:var(--teal-900);background:var(--bg);padding:0 6px;
+}
+.reporting-card .card-name{font-size:12.5px}
+.reporting-card .card-role{font-size:10.5px;line-height:1.3}
+
+.card>.details{
+  position:absolute;top:calc(100% + 6px);left:-2px;right:-2px;
+  background:var(--card);border:2px solid var(--teal);border-radius:8px;
+  padding:10px 12px;font-size:11px;z-index:50;display:none;
+  box-shadow:0 8px 22px rgba(15,23,42,0.10);
+}
+.card.human>.details{border-color:var(--coral);border-style:dotted}
+.reporting-card>.details{border-width:1.5px}
+.card:hover, .card.active{z-index:60}
+.card:hover>.details, .card.active>.details{display:block}
+
+.details h4{
+  font-size:9.5px;text-transform:uppercase;letter-spacing:0.06em;
+  color:var(--muted);font-weight:700;margin:7px 0 3px;
+}
+.details h4:first-child{margin-top:0}
+.details ol, .details ul{padding-left:16px}
+.details li{margin-bottom:2px;font-size:11px;color:var(--ink)}
+.details ul li{list-style-type:square}
+.details p{font-size:11px;color:var(--ink)}
+.gap-inline,.human-inline{
+  display:inline-block;padding:0 4px;border-radius:3px;font-size:8.5px;
+  font-weight:700;margin-left:5px;border:1px solid;text-transform:uppercase;
+  letter-spacing:0.04em;vertical-align:1px;
+}
+.gap-inline{background:var(--amber-50);color:var(--amber-800);border-color:var(--amber)}
+.human-inline{background:var(--coral-50);color:var(--coral-700);border-color:var(--coral)}
+
+.gap-note{
+  margin-top:7px;padding:6px 8px;
+  background:var(--amber-50);
+  border-left:3px solid var(--amber);
+  border-radius:3px;
+  font-size:10.5px;color:var(--amber-800);line-height:1.45;
+}
+.gap-note + .gap-note{margin-top:5px}
+.gap-note .gap-inline{margin:0 5px 0 0;vertical-align:1px}
+.gap-note strong{font-weight:700;color:var(--amber-800)}
+.gap-note em{font-style:italic;font-weight:500;color:var(--ink)}
+
+/* Compound (Onboarding) */
+.compound{padding:9px 10px 10px;display:flex;flex-direction:column;gap:5px}
+.compound-label{
+  font-size:9.5px;text-transform:uppercase;letter-spacing:0.08em;
+  color:var(--muted);font-weight:700;margin-top:3px;
+  display:flex;align-items:center;gap:8px;
+}
+.compound-label::after{content:"";flex:1;height:1px;background:var(--line)}
+
+.sub-flow{display:flex;align-items:stretch;gap:0;position:relative}
+.sub-flow .sub-card{flex:1 1 0;min-width:0}
+.flow-arrow{
+  flex:0 0 36px;
+  display:flex;align-items:flex-end;justify-content:center;
+  position:relative;padding-bottom:12px;
+}
+.flow-arrow .al{
+  position:absolute;top:8px;left:50%;transform:translateX(-50%);
+  font-size:8.5px;color:var(--teal-900);font-weight:700;
+  background:var(--card);padding:0 3px;white-space:nowrap;
+  text-transform:uppercase;letter-spacing:0.05em;
+}
+.flow-arrow svg{width:32px;height:14px;overflow:visible}
+
+.sub-card{
+  background:var(--teal-50);border:1.5px solid var(--teal);border-radius:6px;
+  padding:7px 9px;position:relative;cursor:pointer;
+}
+.sub-card .card-name{font-size:11.5px}
+.sub-card .card-role{font-size:10.5px;line-height:1.3}
+.sub-card>.details{
+  position:absolute;top:calc(100% + 5px);left:-1px;right:-1px;
+  background:var(--card);border:1.5px solid var(--teal);border-radius:6px;
+  padding:8px 10px;font-size:10.5px;z-index:70;display:none;
+  box-shadow:0 8px 22px rgba(15,23,42,0.10);
+}
+.sub-card>.details li{font-size:10.5px}
+.sub-card:hover>.details, .sub-card.active>.details{display:block}
+.sub-card:hover, .sub-card.active{z-index:70}
+
+.sub-exit{
+  margin-top:5px;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  padding:5px 10px;
+  background:var(--coral-50);
+  border:1.5px dashed var(--coral);
+  border-radius:5px;
+  font-size:10px;color:var(--coral-700);font-weight:700;
+  text-transform:uppercase;letter-spacing:0.05em;
+}
+.sub-exit svg{width:22px;height:10px;flex-shrink:0;overflow:visible}
+
+.kpi-inline{
+  margin-top:6px;padding:7px 10px;background:var(--teal-50);
+  border-radius:6px;border:1px dashed var(--teal);
+}
+.kpi-inline h4{
+  font-size:9.5px;text-transform:uppercase;letter-spacing:0.06em;
+  color:var(--teal-900);font-weight:700;margin-bottom:3px;
+}
+.kpi-inline ul{padding-left:14px}
+.kpi-inline li{font-size:10.5px;color:var(--ink);margin-bottom:1px;list-style-type:square}
+
+/* Connectors */
+.connector{position:relative;width:100%}
+.connector svg{width:100%;height:100%;display:block;overflow:visible}
+.connector .lbl{
+  position:absolute;background:var(--bg);padding:1px 6px;font-size:10px;
+  color:var(--muted);font-weight:600;letter-spacing:0.02em;white-space:nowrap;
+}
+.connector .lbl.teal{color:var(--teal-900);font-weight:700}
+.connector .lbl.coral{color:var(--coral-700);font-weight:700}
+
+/* Tier 2 horizontal arrows */
+.t2-arrow{
+  position:absolute;top:24px;transform:translateX(-50%);
+  width:30px;height:14px;z-index:5;pointer-events:none;
+}
+.t2-arrow .alab{
+  position:absolute;top:-13px;left:50%;transform:translateX(-50%);
+  font-size:9px;color:var(--muted);font-weight:600;
+  background:var(--bg);padding:0 4px;white-space:nowrap;
+  text-transform:uppercase;letter-spacing:0.04em;
+}
+
+/* Tier 3 split */
+.tier3-split{display:grid;grid-template-columns:1fr 1fr;gap:14px;position:relative}
+.tier3-split .ac-arrow{
+  position:absolute;top:50%;left:calc(50% - 7px);transform:translateY(-50%);
+  width:14px;height:10px;z-index:5;pointer-events:none;
+}
+
+.footer-note{
+  font-size:10px;color:var(--muted);text-align:center;
+  margin-top:8px;font-style:italic;
+}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <div class="title">
+    <h1>Round Treasury — GTM Operations Architecture</h1>
+    <p class="sub">Multi-tier agent system with human-in-the-loop checkpoints · Seed-stage UK fintech</p>
+  </div>
+  <div class="legend">
+    <div class="lg"><span class="lg-swatch ai"></span>AI agent</div>
+    <div class="lg"><span class="lg-swatch human"></span>Human step</div>
+    <div class="lg"><span class="lg-line solid"></span>Execution flow</div>
+    <div class="lg"><span class="lg-line dashed"></span>Insights / events</div>
+    <div class="lg"><span class="badge gap">GAP</span></div>
+    <div class="lg"><span class="badge built">Built ✓</span></div>
+  </div>
+</div>
+
+<main class="architecture">
+
+  <!-- ====== TIER 1 - Master only, centre stage ====== -->
+  <div class="tier-label"><span class="num">1</span>Orchestration &amp; Intelligence</div>
+  <div class="master-row">
+    <div class="card master-card" data-card>
+      <div class="card-head">
+        <div class="card-name">Master Rev Ops Analysis Agent</div>
+      </div>
+      <div class="card-role">Orchestrates the revenue function AND monitors all execution agents for patterns, bottlenecks, and signals.</div>
+      <div class="details">
+        <h4>Orchestration — What it does</h4>
+        <ol>
+          <li>Routes work between execution agents</li>
+          <li>Manages handoffs across the customer journey</li>
+          <li>Surfaces blockers to the founding team</li>
+        </ol>
+        <h4>Analysis — What it does</h4>
+        <ol>
+          <li>Marketing Analysis: campaign performance, KPIs, bottlenecks</li>
+          <li>Sales Analysis: pipeline bottlenecks, KPIs</li>
+          <li>Onboarding Analysis: KYC bottlenecks, KPIs</li>
+          <li>Expansion Analysis: signals for upsell, high transaction volume, feature adoption by company type</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <!-- Connector: Master → execution agents (working under) + Master → Reporting (insights) + execution → Reporting (event streams) -->
+  <div class="connector" id="c1" style="height:120px">
+    <svg viewBox="0 0 1200 120" preserveAspectRatio="none">
+      <defs>
+        <marker id="ar-t1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#0d9488"/>
+        </marker>
+        <marker id="ar-t1d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#0d9488"/>
+        </marker>
+      </defs>
+
+      <!-- WORKING UNDER (solid): Master trunk + bus to 3 execution agents -->
+      <path d="M 600 0 L 600 24" stroke="#0d9488" stroke-width="2.4" fill="none"/>
+      <path d="M 144 24 L 781 24" stroke="#0d9488" stroke-width="2.4" fill="none"/>
+      <path d="M 144 24 L 144 116" stroke="#0d9488" stroke-width="2.4" fill="none" marker-end="url(#ar-t1)"/>
+      <path d="M 462 24 L 462 116" stroke="#0d9488" stroke-width="2.4" fill="none" marker-end="url(#ar-t1)"/>
+      <path d="M 781 24 L 781 116" stroke="#0d9488" stroke-width="2.4" fill="none" marker-end="url(#ar-t1)"/>
+
+      <!-- EVENT STREAMS (dashed): feeds from agents up to bus, bus right, drop into Reporting -->
+      <path d="M 175 120 L 175 90" stroke="#0d9488" stroke-width="1.6" stroke-dasharray="4 3" fill="none"/>
+      <path d="M 492 120 L 492 90" stroke="#0d9488" stroke-width="1.6" stroke-dasharray="4 3" fill="none"/>
+      <path d="M 812 120 L 812 90" stroke="#0d9488" stroke-width="1.6" stroke-dasharray="4 3" fill="none"/>
+      <path d="M 175 90 L 1050 90" stroke="#0d9488" stroke-width="1.6" stroke-dasharray="4 3" fill="none"/>
+      <path d="M 1050 90 L 1050 116" stroke="#0d9488" stroke-width="1.6" stroke-dasharray="4 3" fill="none" marker-end="url(#ar-t1d)"/>
+
+      <!-- INSIGHTS (dotted): Master → Reporting, separate dashed route -->
+      <path d="M 948 0 L 948 52 L 1110 52 L 1110 116" stroke="#0d9488" stroke-width="1.6" stroke-dasharray="2 3" fill="none" marker-end="url(#ar-t1d)"/>
+    </svg>
+    <div class="lbl teal" style="left:50%;top:11px;transform:translateX(-50%)">working under ↓</div>
+    <div class="lbl teal" style="left:86%;top:46px;transform:translateX(-50%)">insights → Reporting</div>
+    <div class="lbl teal" style="left:42%;top:84px;transform:translateX(-50%)">event streams → Reporting</div>
+  </div>
+
+  <!-- ====== TIER 2 - Execution agents + Reporting sidecar ====== -->
+  <div class="tier-label"><span class="num">2</span>Execution<span style="margin-left:6px;color:#94a3b8;text-transform:none;letter-spacing:normal;font-weight:500;font-size:10px">· with downstream Reporting output</span></div>
+  <div class="tier-row cols-4">
+    <!-- Marketing -->
+    <div class="card" data-card>
+      <div class="card-head">
+        <div class="card-name">Marketing Agent</div>
+      </div>
+      <div class="card-role">Captures, qualifies, and routes prospective leads into the revenue funnel.</div>
+      <div class="details">
+        <h4>What it does</h4>
+        <ol>
+          <li>Lead ingestion via forms, hackathons, LinkedIn engagement, other channels</li>
+          <li>Qualifying and filtering credible leads<span class="gap-inline">GAP</span></li>
+          <li>Routes qualified leads to Sales Agent</li>
+          <li>Handles compliance and legal sign-offs for marketing content<span class="gap-inline">GAP</span></li>
+          <li>Pushes qualified leads into HubSpot</li>
+        </ol>
+        <div class="gap-note">
+          <span class="gap-inline">GAP</span><strong>Qualifying and filtering credible leads:</strong> <em>I know the basics of lead qualification but don't know the specific details of how credible leads are qualified and filtered at Round Treasury. Will be shadowing the marketing team to gain specific insights.</em>
+        </div>
+        <div class="gap-note">
+          <span class="gap-inline">GAP</span><strong>Handles compliance and legal sign-offs for marketing content:</strong> <em>I'd like to understand how compliance and legal sign-offs work for marketing content at Round. Will be shadowing the marketing team to learn the actual workflow.</em>
+        </div>
+        <h4>Level 1 KPI Trackers</h4>
+        <ul>
+          <li>MQLs generated per week</li>
+          <li>MQL to SQL conversion rate</li>
+          <li>Content publishing rate (posts per week)</li>
+          <li>Content sign-off cycle time (draft to publish, days)</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Sales -->
+    <div class="card" data-card>
+      <div class="card-head">
+        <div class="card-name">Sales Agent</div>
+      </div>
+      <div class="card-role">Enriches qualified leads, manages pipeline, supports AEs to close faster.</div>
+      <div class="details">
+        <h4>What it does</h4>
+        <ol>
+          <li>Receives qualified leads from Marketing Agent</li>
+          <li>Enriches profiles (company name, headcount, type, LinkedIn/website data)</li>
+          <li>HubSpot pipeline: Enriched → Picked up → In progress → Closed</li>
+          <li>AE handoff<span class="human-inline">Human</span><span class="gap-inline">GAP</span></li>
+          <li>Signals Onboarding Agent when deal closes</li>
+        </ol>
+        <div class="gap-note">
+          <span class="gap-inline">GAP</span><strong>AE Handoff:</strong> <em>I know the basics of AE handoff in sales but don't know the specific details of how it's done at Round. Will be shadowing the sales team to understand the actual mechanics.</em>
+        </div>
+        <h4>Level 1 KPI Trackers</h4>
+        <ul>
+          <li>Active pipeline value</li>
+          <li>Pipeline velocity (avg days per stage)</li>
+          <li>Stage-to-stage conversion rate</li>
+          <li>Close rate (closed won / total closes)</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Onboarding compound -->
+    <div class="card compound" data-card>
+      <div class="card-head">
+        <div class="card-name">Onboarding Agent (Rondo)</div>
+      </div>
+      <div class="card-role">Parent agent orchestrating two sub-agents — contract-signed to first deposit.</div>
+
+      <div class="compound-label">Sub-agent flow</div>
+      <div class="sub-flow">
+        <div class="sub-card" data-card>
+          <div class="card-head">
+            <div class="card-name">Welcoming sub-agent</div>
+          </div>
+          <div class="card-role">Greets customer, requests KYC docs by type.</div>
+          <div class="details">
+            <h4>What it does</h4>
+            <ol>
+              <li>Customer greeting</li>
+              <li>KYC document request (varies by customer type: VC, US company overseas, PSCs UK company)</li>
+              <li>Signal KYC sub-agent</li>
+            </ol>
+          </div>
+        </div>
+        <div class="flow-arrow">
+          <span class="al">signals</span>
+          <svg viewBox="0 0 32 14">
+            <defs><marker id="ar-sub1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#0d9488"/></marker></defs>
+            <line x1="0" y1="7" x2="26" y2="7" stroke="#0d9488" stroke-width="2" marker-end="url(#ar-sub1)"/>
+          </svg>
+        </div>
+        <div class="sub-card" data-card>
+          <div class="card-head">
+            <div class="card-name">KYC sub-agent</div>
+            <div class="badges"><span class="badge built">Built ✓</span></div>
+          </div>
+          <div class="card-role">GPT-4o vision; verifies and forwards.</div>
+          <div class="details">
+            <h4>What it does</h4>
+            <ol>
+              <li>Receives signal from welcoming sub-agent</li>
+              <li>Verifies document legibility and type using GPT-4o vision</li>
+              <li>IF passes: informs customer AND forwards documents to compliance partner</li>
+              <li>IF fails: informs customer to re-upload</li>
+              <li>Signals Activation Call when KYC clears</li>
+            </ol>
+            <div class="gap-note">
+              <span class="gap-inline">GAP</span>The <em>handoff mechanism</em> to the compliance partner (API integration vs. email vs. partner portal) is not yet defined. Forwarding happens — <strong>how</strong> the documents physically reach the partner is the open question.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sub-exit">
+        <svg viewBox="0 0 22 10">
+          <defs><marker id="ar-sub-exit" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/></marker></defs>
+          <line x1="0" y1="5" x2="16" y2="5" stroke="#ea580c" stroke-width="2" marker-end="url(#ar-sub-exit)"/>
+        </svg>
+        <span>signals Activation Call when KYC clears</span>
+      </div>
+
+      <div class="kpi-inline">
+        <h4>Level 1 KPI Trackers (whole flow)</h4>
+        <ul>
+          <li>Time to KYC submission</li>
+          <li>Time to approval</li>
+          <li>Time to first deposit</li>
+          <li>KYC pass rate (auto-check %)</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Reporting Agent (sidecar - downstream consumer) -->
+    <div class="card reporting-card" data-card>
+      <div class="card-head">
+        <div class="card-name">Reporting Agent</div>
+      </div>
+      <div class="card-role">Receives event streams from execution agents and insights from the Master Agent. Builds the weekly GTM dashboard.</div>
+      <div class="details">
+        <h4>What it does</h4>
+        <ol>
+          <li>Receives event streams from all execution agents</li>
+          <li>Receives insights from Master Rev Ops Analysis Agent</li>
+          <li>Builds weekly GTM dashboard: Marketing, Sales, Onboarding streams</li>
+          <li>Shows KPIs, bottleneck heatmap, performance trends</li>
+          <li>Traffic-light health system (Green / Amber / Red) across all functions</li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- Horizontal arrows between Tier 2 execution cards -->
+    <div class="t2-arrow" style="left:25.28%">
+      <span class="alab">qualified lead</span>
+      <svg width="30" height="14" viewBox="0 0 30 14">
+        <defs><marker id="ar-ink1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#0f172a"/></marker></defs>
+        <line x1="0" y1="7" x2="24" y2="7" stroke="#0f172a" stroke-width="2" marker-end="url(#ar-ink1)"/>
+      </svg>
+    </div>
+    <div class="t2-arrow" style="left:51.8%">
+      <span class="alab">deal closed</span>
+      <svg width="30" height="14" viewBox="0 0 30 14">
+        <defs><marker id="ar-ink2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#0f172a"/></marker></defs>
+        <line x1="0" y1="7" x2="24" y2="7" stroke="#0f172a" stroke-width="2" marker-end="url(#ar-ink2)"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Connector T2 -> T3 -->
+  <div class="connector" id="c2" style="height:50px">
+    <svg viewBox="0 0 1200 50" preserveAspectRatio="none">
+      <defs>
+        <marker id="ar-coral-big" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/>
+        </marker>
+      </defs>
+      <!-- Sales (x=462) → AE Handoff: prominent solid coral -->
+      <path d="M 462 0 L 462 46" stroke="#ea580c" stroke-width="3.2" fill="none" marker-end="url(#ar-coral-big)"/>
+      <!-- Onboarding (x=781) → Activation Call (x=708 in col 3 left half) -->
+      <path d="M 781 0 L 781 18 L 708 18 L 708 46" stroke="#ea580c" stroke-width="3.2" fill="none" marker-end="url(#ar-coral-big)"/>
+    </svg>
+    <div class="lbl coral" style="left:38.5%;top:18px;transform:translateX(-50%);font-size:11px;font-weight:700;padding:2px 8px;border:1px solid var(--coral);border-radius:3px;background:var(--coral-50)">AE handoff ↓ HUMAN</div>
+    <div class="lbl coral" style="left:62%;top:6px;transform:translateX(-50%)">KYC clears → activation</div>
+  </div>
+
+  <!-- ====== TIER 3 - Human Steps & Follow-on ====== -->
+  <div class="tier-label"><span class="num">3</span>Human Steps &amp; Follow-on</div>
+  <div class="tier-row cols-4">
+    <div></div>
+
+    <!-- AE Handoff (now with GAP) -->
+    <div class="card human" data-card>
+      <div class="card-head">
+        <div class="card-name">AE Handoff</div>
+        <div class="badges"><span class="badge human-tag">Human</span><span class="badge gap">GAP</span></div>
+      </div>
+      <div class="card-role">Account Executives pick up enriched profiles, run sales conversations, close deals.</div>
+      <div class="details">
+        <div class="gap-note">
+          <span class="gap-inline">GAP</span><strong>AE Handoff:</strong> <em>I know the basics of AE handoff in sales but don't know the specific details of how it's done at Round. Will be shadowing the sales team to understand the actual mechanics.</em>
+        </div>
+      </div>
+    </div>
+
+    <!-- Activation Call + Deposit Agent -->
+    <div class="tier3-split">
+      <div class="card human" data-card>
+        <div class="card-head">
+          <div class="card-name">Activation Call</div>
+          <div class="badges"><span class="badge human-tag">Human</span></div>
+        </div>
+        <div class="card-role">Human-led activation call to walk customer through the product before first deposit.</div>
+      </div>
+      <svg class="ac-arrow" viewBox="0 0 14 10">
+        <defs><marker id="ar-act" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#0f172a"/></marker></defs>
+        <line x1="0" y1="5" x2="10" y2="5" stroke="#0f172a" stroke-width="1.8" marker-end="url(#ar-act)"/>
+      </svg>
+      <div class="card" data-card>
+        <div class="card-head">
+          <div class="card-name">Deposit Agent</div>
+        </div>
+        <div class="card-role">Tracks first deposit and closes the onboarding loop.</div>
+        <div class="details">
+          <h4>What it does</h4>
+          <ol>
+            <li>Reminds customer if first deposit not made within X days</li>
+            <li>Closes loop once deposit arrives</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <div></div><!-- empty col 4 (under Reporting sidecar) -->
+  </div>
+
+  <div class="footer-note">Hover or click any agent card to reveal what it does and its Level 1 KPI trackers.</div>
+</main>
+
+<script>
+(function(){
+  const cards = document.querySelectorAll('[data-card]');
+  cards.forEach(card => {
+    card.addEventListener('click', e => {
+      e.stopPropagation();
+      const wasActive = card.classList.contains('active');
+      document.querySelectorAll('[data-card].active').forEach(c => {
+        if (c !== card) c.classList.remove('active');
+      });
+      card.classList.toggle('active', !wasActive);
+    });
+  });
+  document.addEventListener('click', () => {
+    document.querySelectorAll('[data-card].active').forEach(c => c.classList.remove('active'));
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('[data-card].active').forEach(c => c.classList.remove('active'));
+    }
+  });
+})();
+</script>
+</body>
+</html>
